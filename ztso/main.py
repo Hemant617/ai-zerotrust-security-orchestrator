@@ -4,9 +4,12 @@ Main FastAPI Application
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import logging
+import os
 
 from .orchestrator import SecurityOrchestrator
 
@@ -73,8 +76,24 @@ async def root():
     return {
         "name": "AI Zero-Trust Security Orchestrator",
         "version": "1.0.0",
-        "status": "operational"
+        "status": "operational",
+        "web_interface": "/web",
+        "api_docs": "/docs",
+        "dashboard": "/dashboard"
     }
+
+
+@app.get("/web")
+async def web_interface():
+    """Serve the web interface."""
+    web_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "index.html")
+    if os.path.exists(web_path):
+        return FileResponse(web_path)
+    else:
+        return {
+            "message": "Web interface not found. Please ensure web/index.html exists.",
+            "alternative": "Use /docs for interactive API documentation"
+        }
 
 
 @app.get("/health")
