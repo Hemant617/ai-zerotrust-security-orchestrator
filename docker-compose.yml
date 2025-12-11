@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # Main Application
+  orchestrator:
+    build: .
+    container_name: ztso-orchestrator
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://ztso:ztso_secure@postgres:5432/ztso
+      - REDIS_URL=redis://redis:6379/0
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    volumes:
+      - ./logs:/app/logs
+      - ./models:/app/models
+    networks:
+      - ztso-network
+
+  # PostgreSQL Database
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: ztso-postgres
+    environment:
+      - POSTGRES_USER=ztso
+      - POSTGRES_PASSWORD=ztso_secure
+      - POSTGRES_DB=ztso
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - ztso-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ztso-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - ztso-network
+
+  # Apache Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: ztso-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - ztso-network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: ztso-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - ztso-network
+
+  # MongoDB for Logs
+  mongodb:
+    image: mongo:7
+    container_name: ztso-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=ztso
+      - MONGO_INITDB_ROOT_PASSWORD=ztso_secure
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - ztso-network
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ztso-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - ztso-network
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ztso-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - ztso-network
+
+volumes:
+  postgres-data:
+  redis-data:
+  mongodb-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  ztso-network:
+    driver: bridge
